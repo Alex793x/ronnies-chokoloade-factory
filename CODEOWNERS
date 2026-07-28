@@ -1,0 +1,12 @@
+# CODEOWNERS — required reviewers for ronnies-chokoloade-factory (monolith root).
+# Owners: the Energy department, represented by the selected users below.
+# Branch protection on `main` requires CODEOWNERS approval (see CONTRIBUTING.md).
+# On a GitHub org you may also grant the whole team: @<your-org>/energy
+# Syntax: https://docs.github.com/articles/about-code-owners
+
+* @adam-lagoda @Alex793x @skadefro @LishuaiJing3 @mitanuriel
+
+# Keep CI governance, the embedded standards, and the service manifest owned explicitly.
+/.github/ @adam-lagoda @Alex793x @skadefro @LishuaiJing3 @mitanuriel
+/.claude/ @adam-lagoda @Alex793x @skadefro @LishuaiJing3 @mitanuriel
+/keel.services.json @adam-lagoda @Alex793x @skadefro @LishuaiJing3 @mitanuriel

@@ -1,0 +1,10 @@
+[
+  {
+    "branch": "main",
+    "required_reviews": 1,
+    "require_codeowners": true,
+    "required_checks": [
+      "gate"
+    ]
+  }
+]

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "project": "ronnies-chokoloade-factory",
+  "shared_paths": [
+    ".github/",
+    "keel.services.json",
+    "libs/"
+  ],
+  "services": [
+    {
+      "dir": "fe",
+      "type": "fe",
+      "lang": "react",
+      "name": "Frontend",
+      "depends_on": []
+    },
+    {
+      "dir": "api",
+      "type": "api",
+      "lang": "python",
+      "name": "Backend API",
+      "depends_on": []
+    },
+    {
+      "dir": "dp",
+      "type": "dp",
+      "lang": "python",
+      "name": "Data pipeline",
+      "depends_on": []
+    },
+    {
+      "dir": "inf",
+      "type": "inf",
+      "lang": "terraform",
+      "name": "Infrastructure",
+      "depends_on": []
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+# Smart monolith CI — change-aware selective rebuilds, language-aware per service.
+#
+#   detect   → resolves the git diff to affected services via
+#              .github/scripts/detect_services.py + keel.services.json.
+#   gate     → ALWAYS runs: resolver property tests + manifest sanity.
+#              This is the required check on `main`.
+#   validate / test / build → one matrix job each over ONLY the affected services,
+#              delegating to the SAME shared, language-aware dispatchers every repo
+#              uses (per-service `stack` = the service's language). No inline
+#              per-language steps: the pipeline logic lives in the Keel composites
+#              under .github/actions/<phase>/<stack>/.
+#
+# Any failure to compute the diff degrades safely to a FULL rebuild
+# (the resolver is a total function — see docs/ci.md).
+name: ci
+
+on:
+  push:
+    branches: [main, dev, staging]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.resolve.outputs.services }}
+      any: ${{ steps.resolve.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed paths
+        shell: bash
+        run: |
+          set -u
+          RANGE=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" || true
+            RANGE="origin/${{ github.base_ref }}...HEAD"
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+              RANGE="${BEFORE}..HEAD"
+            fi
+          fi
+          : > changed.txt
+          if [ -n "$RANGE" ]; then
+            git diff --name-only "$RANGE" > changed.txt || : > changed.txt
+          fi
+          echo "diff range: ${RANGE:-<none - resolver falls back to ALL services>}"
+          cat changed.txt
+
+      - name: Resolve affected services
+        id: resolve
+        run: |
+          python .github/scripts/detect_services.py \
+            --manifest keel.services.json \
+            --changed changed.txt \
+            --github-output "$GITHUB_OUTPUT"
+
+  gate:
+    name: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the gate toolchain
+        run: pip install -e ".[dev]"
+
+      - name: Resolver property tests + root tests
+        run: pytest -q
+
+      - name: Manifest sanity
+        run: |
+          python -c "import json,pathlib; m=json.load(open('keel.services.json')); dirs=[s['dir'] for s in m['services']]; assert len(dirs)==len(set(dirs)), f'duplicate service dirs: {dirs}'; missing=[d for d in dirs if not pathlib.Path('services',d).is_dir()]; assert not missing, f'manifest dirs missing on disk: {missing}'; print('manifest OK:', ', '.join(dirs))"
+
+  # Each affected service runs the SAME language-aware dispatcher every standalone repo uses,
+  # scoped to its services/<dir>/ tree. stack = the service's language (react → node composite).
+  validate:
+    name: validate
+    needs: [detect, gate]
+    if: needs.detect.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.services) }}
+    uses: Alex793x/keel/.github/workflows/reusable-validate.yml@main
+    with:
+      stack: ${{ matrix.lang }}
+      working-directory: services/${{ matrix.dir }}
+
+  test:
+    name: test
+    needs: [detect, gate]
+    if: needs.detect.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.services) }}
+    uses: Alex793x/keel/.github/workflows/reusable-test.yml@main
+    with:
+      stack: ${{ matrix.lang }}
+      working-directory: services/${{ matrix.dir }}
+
+  build:
+    name: build
+    needs: [detect, gate]
+    if: needs.detect.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.services) }}
+    uses: Alex793x/keel/.github/workflows/reusable-build.yml@main
+    with:
+      stack: ${{ matrix.lang }}
+      working-directory: services/${{ matrix.dir }}

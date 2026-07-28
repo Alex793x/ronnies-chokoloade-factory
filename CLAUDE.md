@@ -1,0 +1,71 @@
+# CLAUDE.md — agent guide for ronnies-chokoloade-factory
+
+This file orients **Claude Code** (and any Claude-based coding agent) working in
+`ronnies-chokoloade-factory`, a Ramboll **monolith** owned by the
+**Energy** department
+(Adam Lagoda, Alex Holmberg, Allan Zimmermann, 7AI, Elina K.). Verdens bedste italienske chokolade is
+
+## Read these skills first — they are binding
+
+The engineering standards for this repo are encoded as skills under
+`.claude/skills/`. **Adopt them on every change:**
+
+1. **[`monorepo-selective-ci`](.claude/skills/monorepo-selective-ci/SKILL.md)** —
+   the `keel.services.json` contract: every service = a `services/<dir>/`
+   directory **plus** a manifest entry (with honest `depends_on`); shared-path
+   changes (`.github/`, `keel.services.json`, `libs/`) rebuild everything.
+2. **[`property-based-testing`](.claude/skills/property-based-testing/SKILL.md)** —
+   every new pure function ships with at least one **Hypothesis** property test
+   (idempotency, invariants, round-trip, metamorphic). A shrinking counterexample
+   is a real bug.
+3. **[`python-clean-code`](.claude/skills/python-clean-code/SKILL.md)** — small,
+   single-responsibility, **fully-typed** functions with docstrings; guard clauses;
+   no dead code.
+4. **[`git-ci-governance`](.claude/skills/git-ci-governance/SKILL.md)** —
+   `main`/`dev`/`staging`; branches named **exactly** `feature/<ticket>-<slug>`,
+   `bug/<ticket>-<slug>`, or `hotfix/<ticket>-<slug>`; Conventional Commits; PRs
+   into `dev` with review + CODEOWNERS + a green `gate` check.
+
+## Services in this monolith
+
+| Dir | Type | Language |
+| --- | --- | --- |
+| `services/fe/` | Frontend | react |
+| `services/api/` | Backend API | python |
+| `services/dp/` | Data pipeline | python |
+| `services/inf/` | Infrastructure | terraform |
+
+Each service keeps its own toolchain and tests inside its directory. The CI
+(`.github/workflows/ci.yml`) only rebuilds the services your change affects —
+resolved by `.github/scripts/detect_services.py` against `keel.services.json`.
+
+## Project layout
+
+```
+services/<dir>/           # one directory per service (see the table above)
+keel.services.json        # machine-readable service index — CI's source of truth
+.github/scripts/          # detect_services.py — the pure selective-CI resolver
+.github/workflows/ci.yml  # detect → gate → affected-services matrix
+tests/                    # Hypothesis property suite for the resolver (the gate)
+docs/                     # service index + how the smart CI works
+```
+
+## Local commands (root gate)
+
+```bash
+pip install -e ".[dev]"
+pytest                # resolver property tests — the always-on `gate` job
+
+# Dry-run the resolver against your working set:
+git diff --name-only dev...HEAD | python .github/scripts/detect_services.py \
+  --manifest keel.services.json --changed -
+```
+
+## Non-negotiables (summary)
+
+- New/changed service ⇒ keep `keel.services.json` in sync (dir + `depends_on`).
+- Never weaken the resolver's safe fallbacks (empty diff ⇒ ALL; error ⇒ ALL).
+- New pure function ⇒ at least one property test; keep the gate green.
+- Respect the branch model and naming; PRs go into `dev`.
+
+When in doubt, open the relevant `SKILL.md` and follow it.
